@@ -1,20 +1,18 @@
-<!-- house-style: template — fill this file in, then delete this line -->
-
 # Screenshots
 
-Images referenced from the README and the documents.
+The repository holds no images.
 
-<!--
-  Put the files here and reference them from the README:
+The pipeline has no interface to photograph. Its output is text on standard
+output, a JSON file, a workbook and a notebook, and the plots live in the
+notebook cells rather than in files.
 
-  ```markdown
-  ![The main window](docs/screenshots/main.png)
-  ```
+The workbook is the one artefact that can hold a picture, and it does not:
+`pandas.to_excel` writes the cells and nothing else.
 
-  Images are referenced by relative path, so they resolve both on GitHub and
-  in a local checkout. The house-style checker verifies that every image
-  reference points at a file that exists, so a renamed screenshot cannot
-  quietly break the README.
+## Putting a picture here
 
-  Delete this file once the project has images of its own.
--->
+This folder is part of the standard, and the images the README shows are
+referenced by a relative path, so they have to live somewhere the checker
+can resolve. If a plot is worth keeping and the README is going to show it,
+export it from the notebook into this folder and point at it from the README
+as `docs/screenshots/<name>.png`.
