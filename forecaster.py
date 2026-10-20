@@ -204,14 +204,14 @@ def _get_date_meta(target_date: datetime.date, events: List[Dict]) -> str:
     """Return Russian day name and optional holiday info for context."""
     days = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"]
     day_name = days[target_date.weekday()]
-    
+
     # Check if target_date itself is a holiday
     holidays = [e["description"] for e in events if e.get("event_type") == "holiday" and e.get("date") == target_date]
     if holidays:
         # Avoid duplicate "День смеха (1 апреля)" -> just info
         h_str = ", ".join(holidays)
         return f"{day_name}, {h_str}"
-    
+
     return day_name
 
 
@@ -1582,13 +1582,13 @@ def llm_forecast(
         return []
 
     has_lead = OUTLETS[outlet]["has_lead"]
-    
+
     df_clustered = df.copy()
     df_clustered["cluster"] = labels
 
     date_meta = _get_date_meta(target_date, events_list or [])
     topic_vec, _ = _build_topic_vectorizer(df)
-    
+
     candidate_pool: List[Dict] = []
     total_topics = max(1, min(n_topics, len(topic_info)))
     for topic_rank, info in enumerate(topic_info[:n_topics]):

@@ -1,79 +1,20 @@
-# News Forecast Pipeline
+# News forecast pipeline
 
-Репозиторий с воспроизводимым пайплайном для конкурса НИУ ВШЭ «Гонка кентавров ВШЭ — Конкурс краткосрочных прогнозов для команд “Человек + ИИ”».
+Collects what three Russian news outlets published over the past 90 days, works out which stories they are likely to run next, and writes the expected headline and first paragraph for each outlet on a chosen date. It is the submission for the HSE Centaur Race forecasting competition for "Human + AI" teams ([contest page](https://mollab.hse.ru/centaur_hse)), and the whole pipeline runs from one command.
 
-Проект собирает новости, чистит корпус, выделяет темы, строит baseline-прогнозы и генерирует финальные заголовки и лиды через OpenRouter для даты `2026-04-02`.
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 
-## Задача конкурса
+---
 
-По описанию на странице конкурса нужно:
-
-- спрогнозировать заголовки СМИ, которые выйдут `2 апреля 2026 года`;
-- для каждого прогноза указать СМИ, ожидаемый заголовок и первый абзац новости;
-- описать, как был получен прогноз: какая LLM использовалась и какой был промпт;
-- если подается код, приложить техническое описание, `README` и ссылку на публичный GitHub-репозиторий.
-
-В этом репозитории сделан упор на воспроизводимость: весь пайплайн запускается локально, а результаты можно пересчитать через CLI или ноутбук.
-
-Источник описания задачи: [страница конкурса ВШЭ](https://mollab.hse.ru/centaur_hse).
-
-## Что покрывает репозиторий
-
-Сейчас пайплайн работает по трем российским СМИ:
-
-| Slug | Название | Источники | Лиды |
-|---|---|---|---|
-| `kommersant` | Коммерсантъ | RSS + архив | ✅ |
-| `lenta` | Лента.ру | RSS + архив | ✅ |
-| `interfax` | Интерфакс | RSS + архив | ✅ |
-
-## Архитектура
-
-```text
-titles_forecating/
-├── config.py           # пути, даты, параметры источников и OpenRouter
-├── scraper.py          # RSS + архивы + приведение к единому raw CSV
-├── etl.py              # очистка текстов, title cleanup, dedup, audit-отчеты
-├── analyzer.py         # TF-IDF + KMeans темы, эвристическое извлечение сущностей
-├── event_calendar.py   # events.csv + recurring fallback-events
-├── forecaster.py       # inertia / frequency / calendar / retrieval-grounded LLM
-├── backtester.py       # holdout-бэктест на последних 7 днях
-├── metrics.py          # topic/entity/semantic/style/diversity метрики
-├── main.py             # CLI-точка входа
-├── pipeline.ipynb      # Jupyter-ноутбук для пошагового запуска
-└── data/
-    ├── raw/            # сырые выгрузки
-    ├── clean/          # очищенные корпуса и ETL audit
-    ├── forecasts/      # прогнозы и backtest-артефакты
-    └── events/         # календарные события
-```
-
-## Текущий статус
-
-Проект сейчас лучше предсказывает уровень тем, чем конкретные финальные заголовки редакции.
-
-- `frequency` остается самым сильным topic-level baseline;
-- `llm` дает правдоподобные и стилистически похожие заголовки, но topic fidelity все еще ограничен;
-- `calendar` работает как вспомогательный сигнал, а не как главный источник качества;
-- пайплайн подходит для исследовательского прототипа и конкурсной submission с воспроизводимым кодом.
-
-## Быстрый старт
-
-### 1. Установка
+## Quick start
 
 ```bash
 uv sync
+uv run python main.py --mode forecast --target 2026-04-02
 ```
 
-Если нужен альтернативный способ установки:
-
-```bash
-uv pip install -r requirements.txt
-```
-
-### 2. Настройка OpenRouter
-
-Создайте `.env` и укажите ключ:
+Python 3.10 or newer, and `uv` to install it. The forecast stage needs an OpenRouter key. Put one in `.env`, copied from [`.env.example`](.env.example):
 
 ```bash
 OPENROUTER_API_KEY=...
@@ -81,138 +22,144 @@ OPENROUTER_MODEL=anthropic/claude-3-haiku-20240307
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
-Без LLM можно запускать пайплайн с флагом `--no-llm`.
+Without a key every other stage still runs and the forecast comes out empty. `--no-llm` skips the call on purpose.
 
-### 3. CLI
+The forecast reads the corpus in `data/clean/`, which makes it the fast way in. To rebuild that corpus from the news sites, run the scrape first: it pulls 90 days of archive pages and is the slow stage by a wide margin.
 
-```bash
-# Полный пайплайн
-uv run python main.py --mode all --target 2026-04-02
+| Command | What it does |
+| --- | --- |
+| `uv run python main.py --mode all --target 2026-04-02` | Everything: scrape, clean, analyze, backtest, metrics, forecast. |
+| `uv run python main.py --mode scrape` | Collect the news into `data/raw/`. |
+| `uv run python main.py --mode etl` | Clean and deduplicate into `data/clean/`. |
+| `uv run python main.py --mode analyze` | Topics, entities, style profile. |
+| `uv run python main.py --mode backtest` | Replay the last 7 days, one day at a time. |
+| `uv run python main.py --mode metrics` | Score the backtest. |
+| `uv run python main.py --mode forecast --target 2026-04-02` | Write the forecast into `data/forecasts/`. |
 
-# Отдельные этапы
-uv run python main.py --mode scrape
-uv run python main.py --mode etl
-uv run python main.py --mode analyze
-uv run python main.py --mode backtest
-uv run python main.py --mode metrics
-uv run python main.py --mode forecast --target 2026-04-02
+[`pipeline.ipynb`](pipeline.ipynb) runs the same stages cell by cell, with the tables and the plots.
 
-# Комбинированный forecast-режим
-uv run python main.py --mode forecast --target 2026-04-02 --forecast-strategy hybrid
+## What it does
 
-# Отдельный профиль с forward-looking анонсами на целевую дату
-uv run python main.py --mode forecast --target 2026-04-02 --forecast-profile forward_look
+- **Collect three outlets.** RSS feeds and archive pages for Kommersant, Lenta.ru and Interfax, 90 days back from the date of the run. The Wayback Machine fills in when an outlet returns fewer than 50 records.
+- **Clean the corpus.** Residual markup and control characters out, outlet-specific title debris out, exact URL duplicates out, opinion and blog pages out, and near-duplicates out: two titles with a character n-gram similarity above 0.85, published within 72 hours of each other under the same rubric.
+- **Find the topics.** TF-IDF over the titles and the leads, 20 clusters per outlet, each named by its five strongest terms, plus a rolling 14-day frequency table, a volume and rubric noise check, entity extraction and a style profile.
+- **Forecast four ways.** `inertia` carries yesterday's topics forward, `frequency` takes the 14-day leaders, `calendar` turns [`data/events/events.csv`](data/events/events.csv) into headlines, and `llm` writes headlines and leads through OpenRouter.
+- **Select the topics two ways.** The `llm` strategy takes the frequency ranking as it is. The `hybrid` strategy scores every topic on frequency, inertia, calendar support and an outlet-specific prior, then sorts on the sum.
+- **Write in the voice of the outlet.** The prompt carries the topic, the calendar, the entities, eight retrieved headlines from the same outlet and four style examples from it, and asks for two or three numbered headlines with a lead of up to 50 words.
+- **Score the result.** The last 7 days are replayed with the training restricted to what came before, and five metrics come out: topic hit rate, entity F1, semantic similarity, style match and diversity.
+- **Leave the artefacts behind.** Every run writes a timestamped JSON file and a workbook with one sheet per outlet into `data/forecasts/`, and every backtest writes one JSON file per outlet.
 
-# Два итоговых варианта прогноза, которые сохранены в репозитории
-uv run python main.py --mode forecast --target 2026-04-02 --forecast-strategy llm --forecast-profile default
-uv run python main.py --mode forecast --target 2026-04-02 --forecast-strategy hybrid --forecast-profile forward_look
+## How it works
 
-# Только одно СМИ
-uv run python main.py --mode forecast --outlets kommersant --target 2026-04-02
+```
+RSS feeds, archive pages, Wayback CDX
+        |
+        v
+data/raw/{slug}_raw.csv
+        |
+        v
+clean, filter, deduplicate  --->  data/clean/{slug}_clean.csv
+                                 +  {slug}_etl_audit.json
+                                 +  {slug}_etl_daily_counts.csv
+        |
+        v
+TF-IDF + KMeans  ->  topics, entities, style
+        |
+        v
+topic selection:  llm | hybrid   x   default | forward_look
+        |
+        v
+OpenRouter  ->  headline + lead
+        |
+        v
+data/forecasts/forecast_{date}_{strategy}_{profile}_{stamp}.{json,xlsx}
 ```
 
-### 4. Jupyter
+`main.py` is the only entry point. It parses the flags and calls one function per stage, and each stage reads and writes files under `data/` without knowing about the others. `config.py` is imported everywhere and holds the paths, the dates, the outlet table and the thresholds.
 
-Откройте [pipeline.ipynb](pipeline.ipynb) и выполните ячейки по порядку.
+The scrape collects three ways and joins them on the article URL. The RSS feed gives the most recent entries, with the lead taken from the summary. The archive pages give the history, and Kommersant needs one page per rubric per day, which is 14 rubrics for each of the 90 days. The Wayback CDX API runs only when an outlet has produced fewer than 50 records, and its records carry no title, so the ETL drops them at the first step. The date filter is strict and inclusive at both ends, and `data/raw/{slug}_raw.csv` is rewritten on every run rather than appended to.
 
-## Флаги CLI
+The ETL keeps a row count and a date range after each of its steps and writes them to `{slug}_etl_audit.json`, with the per-day counts to `{slug}_etl_daily_counts.csv`. The near-duplicate check compares character n-grams of the titles, and only within one rubric and inside a 72-hour window, so the same headline republished under a second rubric survives the clean.
 
-| Флаг | Описание | По умолчанию |
-|---|---|---|
-| `--mode` | `scrape / etl / analyze / backtest / metrics / forecast / all` | обязательный |
-| `--outlets` | список slug через запятую | все 3 |
-| `--target` | дата прогноза `YYYY-MM-DD` | `2026-04-02` |
-| `--forecast-strategy` | стратегия отбора тем для LLM: `llm` или `hybrid` | `llm` |
-| `--forecast-profile` | профиль прогноза: `default` или `forward_look` | `default` |
-| `--no-llm` | пропустить OpenRouter-генерацию | выключено |
-| `--enrich-leads` | скачивать полные лиды из article pages | выключено |
+The topic step is TF-IDF over the title and the lead together, 20 clusters per outlet, and a cluster is named by the five terms with the highest weights. The frequency table counts the clusters over the last 14 days. The backtest replays the last 7 days one day at a time, trains only on the days before, and skips any day with fewer than 14 days of history behind it.
 
-## Методы прогноза
+The forecast stage differs by strategy and by profile. The `llm` strategy takes the frequency ranking as it is. The `hybrid` strategy adds the inertia count, the calendar overlap and the outlet prior to the frequency score, sorts on the sum, and hands the prompt an editorial instruction for that outlet. The `forward_look` profile then looks at the rows published in the last 14 days that already announce the target date, carry a planning phrase such as "запланировано", or name the date outright, and re-ranks the topics on that score.
 
-| Метод | Что делает |
-|---|---|
-| `inertia` | переносит вчерашние темы на целевую дату |
-| `frequency` | берет самые частые темы за окно `FREQ_WINDOW` |
-| `calendar` | строит заголовки из `events.csv` и recurring событий |
-| `llm` | генерирует заголовки и лиды через OpenRouter по retrieval-grounded prompt |
+The prompt asks for two or three numbered entries, each with a `ЗАГОЛОВОК` line and a `ЛИД` line of up to 50 words, and it goes to OpenRouter with a temperature of 0.4 and a ceiling of 800 tokens. The parser looks for those two labels, so a reply that changes them loses the lead. The scored results are filtered for topic and outlet fit, deduplicated, and reranked with at most four headlines per topic.
 
-Для честного конкурсного артефакта `forecast`-режим экспортирует только `llm`-прогнозы. Baseline-методы остаются в пайплайне для backtest и сравнения качества.
+The export carries the `llm` predictions only, because `main.py` passes `llm_only=True` on the way out. The three baselines stay in the pipeline for the backtest and for the comparison in the report.
 
-В `hybrid`-режиме итоговые заголовки по-прежнему пишет `llm`, но выбор тем перед генерацией идёт по ансамблю из `frequency`, `inertia` и `calendar` сигналов с учетом outlet-specific priors для каждого СМИ.
+## Configuration
 
-Профиль `forward_look` не меняет базовый LLM-pipeline по умолчанию, а запускается отдельно: он поднимает темы, в недавних публикациях которых уже встречаются анонсы, плановые формулировки и прямые упоминания целевой даты вроде `2 апреля`.
+The command line:
 
-## Итоговые режимы
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--mode` | required | `scrape`, `etl`, `analyze`, `backtest`, `metrics`, `forecast` or `all`. |
+| `--outlets` | all three | Comma-separated slugs: `kommersant`, `lenta`, `interfax`. |
+| `--target` | `2026-04-02` | The date to forecast, as `YYYY-MM-DD`. |
+| `--forecast-strategy` | `llm` | `llm` takes the frequency ranking; `hybrid` scores the ensemble. |
+| `--forecast-profile` | `default` | `forward_look` boosts the topics that already announce the target date. |
+| `--no-llm` | off | Skip the OpenRouter call. |
+| `--enrich-leads` | off | Fetch the first paragraph of every article during the scrape. |
 
-В репозитории оставлены два итоговых варианта прогноза, чтобы не потерять и базовый LLM-подход, и более экспериментальный forward-looking режим.
+The environment, read from `.env`:
 
-- `llm + default` — опорный вариант. Он берет сильные темы из ближайшей ретроспективы, добавляет retrieval по похожим историческим заголовкам и генерирует финальные заголовки и лиды без отдельного форсирования анонсов на целевую дату.
-- `hybrid + forward_look` — расширенный вариант. Он добавляет ансамбль topic-сигналов (`frequency + inertia + calendar`), outlet-specific priors и отдельный слой поиска forward-looking упоминаний вроде `2 апреля`, `в четверг`, `ожидается`, `вступит в силу`.
+| Variable | Default |
+| --- | --- |
+| `OPENROUTER_API_KEY` | empty |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `OPENROUTER_MODEL` | `anthropic/claude-3-haiku-20240307` |
 
-Имена итоговых файлов теперь фиксируют оба измерения:
+The thresholds live in [`config.py`](config.py):
 
-- `forecast_{YYYY-MM-DD}_{strategy}_{profile}_{YYYYMMDD_HHMMSS}.json`
-- `forecast_{YYYY-MM-DD}_{strategy}_{profile}_{YYYYMMDD_HHMMSS}.xlsx`
+| Constant | Value | What it does |
+| --- | --- | --- |
+| `HISTORY_DAYS` | `90` | How far back the scrape goes. |
+| `TARGET_DATE` | `2026-04-02` | The default forecast date. |
+| `N_TOPICS` | `20` | Clusters per outlet. |
+| `TOPIC_WINDOW` | `14` | Days in the rolling topic frequency. |
+| `FREQ_WINDOW` | `14` | Days in the frequency baseline, and the history a backtest day needs. |
+| `BACKTEST_DAYS` | `7` | The holdout window. |
+| `DEDUP_THRESHOLD` | `0.85` | Similarity above which two titles are near-duplicates. |
+| `DEDUP_WINDOW_HOURS` | `72` | How far apart two near-duplicates may be published. |
+| `DEDUP_REQUIRE_SAME_RUBRIC` | `True` | Compare only within one rubric. |
+| `REQUEST_DELAY` | `1.5` | Seconds of back-off after a throttled or failed request. |
+| `REQUEST_TIMEOUT` | `15` | Seconds per request. |
+| `MAX_RETRIES` | `3` | Attempts per request. |
 
-Это позволяет хранить рядом несколько запусков без перезаписи и сразу видеть, какой профиль породил конкретный прогноз.
+The metrics stage asks the same endpoint for a second model, `qwen/qwen3-embedding-8b`, for the semantic similarity. Without a key that metric returns zero rather than a warning in the report.
 
-## Что было попробовано
+## Development
 
-Из-за сжатого времени пайплайн развивался как серия быстрых гипотез с обязательной перепроверкой через backtest и ручной просмотр прогнозов.
+```bash
+uv sync                                          # install, from uv.lock
+uv run python main.py --mode forecast --target 2026-04-02   # the forecast
+uv run python main.py --mode all --target 2026-04-02         # the whole pipeline
+jupyter lab pipeline.ipynb                      # the notebook, cell by cell
+```
 
-- Исправили методологию оценки: разделили topic-level и text-level метрики, убрали ложные нули у методов без генерации заголовков и запретили оценивать слишком короткую историю.
-- Починили scraper и ETL: строгий date slice, перезапись `raw` вместо бесконечного append, новый архив для `Коммерсанта`, title cleanup, локальный near-dedup и audit-отчеты по очистке.
-- Проверили несколько вариантов генерации: retrieval-grounded LLM, subclustering, reranking кандидатов, outlet-aware priors для разных типов СМИ и отдельный forward-looking профиль по ближайшей ретроспективе.
+There is no build step. `pyproject.toml` sets `package = false`, so the project is a set of scripts rather than an installable package. There is no test runner in the dependency set either: the two files at the root, `test_scrapers.py` and `test_rss_content.py`, are scripts that print what the RSS feeds return, and both import function names that `scraper.py` no longer has, so they stop at the import.
 
-Что получилось по итогам итераций:
+| Path | What it holds |
+| --- | --- |
+| `main.py` | The CLI entry point. |
+| `config.py` | Paths, dates, the outlet table, the thresholds. |
+| `scraper.py` | The collection stage. |
+| `etl.py` | The cleaning stage and the audit files. |
+| `analyzer.py` | Topics, entities, the noise check, the style profile. |
+| `event_calendar.py` | The calendar of known events. |
+| `forecaster.py` | The four methods, the topic selection, the prompt, the export. |
+| `backtester.py` | The holdout replay. |
+| `metrics.py` | The five metrics and the report. |
+| `pipeline.ipynb` | The same pipeline as a notebook, with the plots. |
+| `data/raw/` | The scraped articles. Not tracked by git. |
+| `data/clean/` | The clean corpus and the ETL audit files. |
+| `data/events/` | `events.csv`, the calendar of known events. |
+| `data/forecasts/` | The forecast runs, the workbooks and the backtest artefacts. |
 
-- `frequency` остался самым надежным topic-level baseline.
-- `llm` оказался самым полезным как базовый генератор правдоподобных заголовков.
-- outlet-aware `hybrid` сделал итоговые заголовки заметно ближе к редакционному углу каждого СМИ.
-- `forward_look` не заменил базовый pipeline, но стал полезным отдельным профилем для сюжетов, где в свежих публикациях уже есть анонсы, планы и временные маркеры.
+The two forecast runs kept in the repository come with a hand-written shortlist of five headlines each: [llm + default](data/forecasts/forecast_2026-04-02_llm_default_shortlist.md) and [hybrid + forward_look](data/forecasts/forecast_2026-04-02_hybrid_forward_look_shortlist.md).
 
-Итоговый рабочий компромисс такой: в репозитории сохранены оба варианта, `llm + default` как опорный и `hybrid + forward_look` как более смелый экспериментальный режим.
+## License
 
-## Оценка качества
-
-Бэктест делается на последних `7` днях истории. Метрики разделены на topic-level и text-level:
-
-| Метрика | Смысл |
-|---|---|
-| `topic_hit` | пересечение ключевых слов темы у прогноза и фактических заголовков |
-| `entity_f1` | F1 по персонам и организациям |
-| `semantic_similarity` | embedding-based похожесть прогноза на реальные новости |
-| `style_match` | близость прогноза к стилю корпуса издания |
-| `diversity` | разнообразие между сгенерированными заголовками |
-
-Важно: для методов без текстовой генерации (`inertia`, `frequency`) text-level метрики показываются как `n/a`, а не как искусственные нули.
-
-## Выходные файлы
-
-| Файл | Содержимое |
-|---|---|
-| `data/raw/{slug}_raw.csv` | сырые статьи после скрапинга |
-| `data/clean/{slug}_clean.csv` | очищенный корпус |
-| `data/clean/{slug}_etl_audit.json` | сводка ETL по шагам |
-| `data/clean/{slug}_etl_daily_counts.csv` | дневные counts по этапам ETL |
-| `data/forecasts/backtests/backtest_{slug}_{YYYYMMDD}.json` | backtest по одному СМИ |
-| `data/forecasts/forecast_{YYYY-MM-DD}_{strategy}_{profile}_{YYYYMMDD_HHMMSS}.json` | итоговый прогноз в JSON, имя файла фиксирует стратегию и профиль |
-| `data/forecasts/forecast_{YYYY-MM-DD}_{strategy}_{profile}_{YYYYMMDD_HHMMSS}.xlsx` | итоговый прогноз в Excel, имя файла фиксирует стратегию и профиль |
-| `data/forecasts/forecast_{YYYY-MM-DD}_{strategy}_{profile}_shortlist.md` | shortlist-выборка лучших заголовков для конкретного варианта прогноза |
-
-## Для конкурсной подачи
-
-Если submission идет вместе с кодом, этот репозиторий уже закрывает базовые требования к воспроизводимости:
-
-- есть публичный `README`;
-- пайплайн запускается одной CLI-командой;
-- можно приложить описание используемой LLM и prompts;
-- можно добавить ссылку на публичный репозиторий и финальные артефакты из `data/forecasts/`;
-- для быстрой подачи можно использовать shortlist-файлы [forecast_2026-04-02_llm_default_shortlist.md](data/forecasts/forecast_2026-04-02_llm_default_shortlist.md) и [forecast_2026-04-02_hybrid_forward_look_shortlist.md](data/forecasts/forecast_2026-04-02_hybrid_forward_look_shortlist.md).
-
-## Ограничения
-
-- качество topic modeling чувствительно к шуму и слишком широким кластерам;
-- `llm` пока лучше в правдоподобии текста, чем в точном угадывании редакционной повестки;
-- `calendar` зависит от полноты `events.csv`;
-- для повторяемости результатов нужен стабильный доступ к OpenRouter и источникам новостей.
+MIT, © Alexander Blinov. See [LICENSE](LICENSE).

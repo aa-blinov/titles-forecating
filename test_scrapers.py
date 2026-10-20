@@ -4,9 +4,9 @@ from scraper import scrape_rss, scrape_outlet, OUTLETS
 def test_scrapers():
     slugs = list(OUTLETS.keys())
     print(f"Available outlets: {slugs}")
-    
+
     results = {}
-    
+
     # Test 1: Quick RSS test for each outlet
     print("\n--- TEST 1: RSS FEEDS ---")
     for slug in slugs:

@@ -34,7 +34,7 @@ def _get_openrouter_embeddings(texts: Tuple[str]) -> np.ndarray:
     if not OPENROUTER_API_KEY:
         print("  [metrics] OPENROUTER_API_KEY missing, semantic similarity will be 0")
         return None
-        
+
     try:
         from openai import OpenAI
         client = OpenAI(
@@ -181,15 +181,15 @@ def semantic_similarity(pred_texts: List[str], actual_texts: List[str]) -> float
     try:
         pred_emb   = _encode_texts(tuple(pred_texts))
         actual_emb = _encode_texts(tuple(actual_texts))
-        
+
         if pred_emb is None or actual_emb is None:
             return 0.0
-            
+
         sims = cosine_similarity(pred_emb, actual_emb)
-        
+
         precision = float(np.mean(sims.max(axis=1)))  # Each pred to its best actual
         recall    = float(np.mean(sims.max(axis=0)))  # Each actual to its best pred
-        
+
         if precision + recall == 0:
             return 0.0
         return 2 * (precision * recall) / (precision + recall)
@@ -213,7 +213,7 @@ def style_match(pred_texts: List[str], corpus_texts: List[str]) -> float:
 
     global _STYLE_CACHE
     cache_key = (len(corpus_texts), corpus_texts[0] if corpus_texts else "")
-    
+
     try:
         if cache_key not in _STYLE_CACHE:
             stopwords = _get_stopwords()
@@ -222,20 +222,20 @@ def style_match(pred_texts: List[str], corpus_texts: List[str]) -> float:
                 max_features=5000,
                 stop_words=list(stopwords),
             )
-            
+
             texts = corpus_texts
             # Берем первые 2000 - это быстрее и стабильнее для кэширования
             if len(texts) > 2000:
                 texts = texts[:2000]
-                
+
             # Fit ONLY on the real corpus to prevent data leakage
             corpus_vecs = vec.fit_transform(texts)
             corpus_mean = np.asarray(corpus_vecs.mean(axis=0))
             _STYLE_CACHE[cache_key] = (vec, corpus_mean)
-            
+
         vec, corpus_mean = _STYLE_CACHE[cache_key]
         pred_vecs   = vec.transform(pred_texts)
-        
+
         sims = cosine_similarity(pred_vecs, corpus_mean)
         return float(sims.mean())
     except Exception as exc:
@@ -375,28 +375,28 @@ def evaluate_all(slugs: List[str] = None,
         if not bt:
             print(f"  [metrics] ⚠️ No backtest data for {slug}")
             continue
-            
+
         df = load_clean(slug)
         corpus_texts = df["title"].dropna().tolist()
-        
+
         # Check available methods in the first successful day
         available_methods = []
         for d in bt:
             if d.get("predictions"):
                 available_methods = list(d["predictions"].keys())
                 break
-        
+
         methods_to_run = [m for m in available_methods if m in methods]
         if not methods_to_run:
             print(f"  [metrics] ⏭️ Skipping {slug.upper()}: No active methods to test.")
             continue
-            
+
         print(f"\n📰 Outlet: {slug.upper()} | Base texts: {len(corpus_texts)} | Methods: {len(methods_to_run)}")
-        
+
         for method in tqdm(methods_to_run, desc=f"Evaluating", leave=False):
             report = full_report(bt, slug, corpus_texts=corpus_texts, method=method)
             key = f"{slug} ({method})"
             all_reports[key] = report
-            
+
     print("\n[metrics] =================== EVALUATION DONE ===================\n")
     return all_reports

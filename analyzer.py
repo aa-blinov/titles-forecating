@@ -217,7 +217,7 @@ def noise_check(df: pd.DataFrame, outlet: str) -> Dict:
     # Rubric noise check
     counts = df["rubric"].str.strip().replace("", np.nan).dropna().value_counts()
     n_missing = (df["rubric"].str.strip() == "").sum()
-    
+
     top_rubric = ""
     top_share  = 0
     if not counts.empty:

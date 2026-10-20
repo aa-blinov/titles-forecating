@@ -58,7 +58,7 @@ def backtest_day(
         freq = topic_frequency(df_train, labels, names)
         topic_info = freq.head(5).to_dict("records")
         for ti in topic_info: ti["name"] = ti.get("cluster_name", "unknown")
-        
+
         events = get_events_for_outlet(outlet, target_date, window_days=2)
         events_summary = summarize_events(events)
         llm_context = (labels, topic_info, events_summary, events)
@@ -80,7 +80,7 @@ def backtest_day(
                     preds = []
             else:
                 continue
-                
+
             day_result["predictions"][method] = [
                 {k: v for k, v in p.items()
                  if k in ("rubric", "topic_label", "title", "lead", "method")}

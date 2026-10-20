@@ -55,8 +55,8 @@ _KOMMERSANT_ARCHIVE_RUBRICS_CACHE: Optional[List[Dict]] = None
 # ================================================================
 
 async def _get_async(
-    url: str, 
-    session: aiohttp.ClientSession, 
+    url: str,
+    session: aiohttp.ClientSession,
     timeout: int = REQUEST_TIMEOUT,
 ) -> Optional[str]:
     """Async GET request with retry, random user-agent, and rate limiting."""
@@ -98,7 +98,7 @@ async def scrape_rss_async(slug: str, session: aiohttp.ClientSession) -> List[Di
         html = await _get_async(rss_url, session)
         if not html:
             return
-        
+
         # Use feedparser on the string
         feed = feedparser.parse(html)
         if feed.bozo and not feed.entries:
@@ -411,9 +411,9 @@ def _is_article_url(slug: str, url: str) -> bool:
 # ================================================================
 
 async def scrape_wayback_async(
-    slug: str, 
+    slug: str,
     start_date: datetime.date,
-    end_date: datetime.date, 
+    end_date: datetime.date,
     session: aiohttp.ClientSession
 ) -> List[Dict]:
     """Use Wayback CDX API asynchronously."""
@@ -488,7 +488,7 @@ def save_raw(slug: str, records: List[Dict]) -> str:
 # ================================================================
 
 async def scrape_outlet_async(
-    slug: str, 
+    slug: str,
     start_date: datetime.date = None,
     end_date: datetime.date = None,
     enrich_leads: bool = False,
@@ -504,7 +504,7 @@ async def scrape_outlet_async(
     print(f"\n[scraper] {cfg['name']} ({slug}) {start_date} → {end_date} (ASYNC)")
 
     semaphore = asyncio.Semaphore(concurrency_limit)
-    
+
     async with aiohttp.ClientSession() as session:
         all_records: Dict[str, Dict] = {}
 
@@ -538,14 +538,14 @@ async def scrape_outlet_async(
                 while curr <= end_date:
                     days.append(curr)
                     curr += datetime.timedelta(days=1)
-                
+
                 async def fetch_day_with_limit(day):
                     async with semaphore:
                         return await scrape_archive_day_async(slug, day, session)
 
                 print(f"  [archive] fetching {len(days)} days in parallel...")
                 day_results = await asyncio.gather(*[fetch_day_with_limit(d) for d in days])
-                
+
                 total_arch = 0
                 for day_recs in day_results:
                     for r in day_recs:
@@ -574,7 +574,7 @@ async def scrape_outlet_async(
         if enrich_leads and cfg["has_lead"]:
             unleaded = [r for r in records if not r.get("lead")]
             print(f"  [enrich] fetching {len(unleaded)} leads with limit {concurrency_limit}...")
-            
+
             async def enrich_with_limit(rec):
                 async with semaphore:
                     extra = await scrape_article_async(slug, rec["url"], session)
@@ -593,21 +593,21 @@ async def scrape_outlet_async(
 
 
 def scrape_all(
-    slugs: List[str] = None, 
+    slugs: List[str] = None,
     start_date: datetime.date = None,
     end_date: datetime.date = None,
     enrich_leads: bool = False,
     save_json: bool = True
 ) -> Dict[str, List[Dict]]:
     """Sync wrapper for asyncio entry point.
-    
+
     Works both in plain Python scripts and inside Jupyter notebooks
     (which already run their own event loop).
     """
     from config import OUTLET_SLUGS, INTERMEDIATE_JSON
     if slugs is None:
         slugs = OUTLET_SLUGS
-    
+
     async def run_all():
         results = {}
         # Scrape each outlet one by one; internal days/leads are parallelised.
@@ -631,10 +631,10 @@ def scrape_all(
             results = future.result()
     else:
         results = asyncio.run(run_all())
-    
+
     if save_json:
         with open(INTERMEDIATE_JSON, "w", encoding="utf-8") as f:
             json.dump(results, f, ensure_ascii=False, indent=2, default=str)
         print(f"\n[scraper] All results saved to JSON: {INTERMEDIATE_JSON}")
-        
+
     return results
